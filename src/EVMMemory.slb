@@ -19,11 +19,24 @@ library EVMMemory {
     function memUPtr(Memory memory self, uint index) internal pure returns (uint) {
         return self.dataPtr + index;
     }
+    
+   function nextPowTwo(uint v) internal pure returns (uint) {
+        require(v == uint32(v));
+        v--;
+        v|=v>>1;
+        v|=v>>2;
+        v|=v>>4;
+        v|=v>>8;
+        v|=v>>16;
+        v++;
+        return v;
+    }
 
     // Resizes and re-allocates memory.
-    function setCapacity(Memory memory self, uint cap) internal pure {
-        assert(cap >= self.size);
+    function setCapacity(Memory memory self, uint capNeeded) internal pure {
+        assert(capNeeded >= self.size);
         uint src = self.dataPtr;
+        uint cap = nextPowTwo(capNeeded);
         uint dest = MemOps.allocate32(cap);
         MemOps.memcopy32(src, dest, self.size);
         self.dataPtr = dest;
@@ -49,6 +62,26 @@ library EVMMemory {
         MemOps.memcopy32(src, dest, mem.size);
     }
 
+    function merklize(bytes32[] hashes) internal pure returns (bytes32) {
+      if (hashes.length == 1) {
+       return hashes[0];
+      } else {
+        bytes32[] memory arr = new bytes32[](hashes.length / 2);
+        for(uint i = 0; i < hashes.length; i = i + 2) {
+          arr[0] = keccak256(hashes[i], hashes[i + 1]);
+        }
+        return merklize(arr);
+      }
+    }
+
+    function getRootHash(Memory memory self) internal pure returns (uint) {
+      bytes32[] memory arr = new bytes32[](1);
+      for(uint i = 0; i < self.cap; i = i + 2) {
+        arr[0] = keccak256(load(self, i * WORD_SIZE), load(self, (i + 1) * WORD_SIZE));
+      }
+      return uint(merklize(arr));
+    }
+
     function toArray(Memory memory self) internal pure returns (bytes memory arr) {
         arr = new bytes(self.size*WORD_SIZE);
         uint dest;
@@ -62,7 +95,7 @@ library EVMMemory {
         arr = new bytes(len);
         uint newSize = (len + 31) / 32;
         if(newSize >= self.cap) {
-            setCapacity(self, newSize + ALLOC_SIZE);
+            setCapacity(self, newSize);
             self.size = newSize;
         }
         uint dest;
@@ -75,7 +108,7 @@ library EVMMemory {
     function store8(Memory memory self, uint index, uint val) internal pure {
         uint newSize = index / WORD_SIZE + 1;
         if(newSize >= self.cap) {
-            setCapacity(self, newSize + ALLOC_SIZE);
+            setCapacity(self, newSize);
         }
         if(newSize > self.size) {
             self.size = newSize;
@@ -90,7 +123,7 @@ library EVMMemory {
     function store(Memory memory self, uint index, uint val) internal pure {
         uint newSize = (index + 31) / WORD_SIZE + 1; // +1 for an extra word due to the 32 bytes wide write.
         if(newSize >= self.cap) {
-            setCapacity(self, newSize + ALLOC_SIZE);
+            setCapacity(self, newSize);
         }
         if(newSize > self.size) {
             self.size = newSize;
@@ -111,7 +144,7 @@ library EVMMemory {
         assert(srcIdx + len <= bts.length);
         uint newSize = (destIdx + len + 31) / WORD_SIZE;
         if(newSize >= self.cap) {
-            setCapacity(self, newSize + ALLOC_SIZE);
+            setCapacity(self, newSize);
         }
         if(newSize > self.size) {
             self.size = newSize;
@@ -138,7 +171,7 @@ library EVMMemory {
     ) internal pure {
         uint newSize = (destIdx + len + 31) / WORD_SIZE;
         if(newSize >= self.cap) {
-            setCapacity(self, newSize + ALLOC_SIZE);
+            setCapacity(self, newSize);
         }
         if(newSize > self.size) {
             self.size = newSize;
@@ -160,7 +193,7 @@ library EVMMemory {
     function load(Memory memory self, uint index) internal pure returns (uint) {
         uint newSize = (index + 31) / WORD_SIZE + 1; // +1 for an extra word due to the 32 bytes wide write.
         if(newSize >= self.cap) {
-            setCapacity(self, newSize + ALLOC_SIZE);
+            setCapacity(self, newSize);
         }
         if(newSize > self.size) {
             self.size = newSize;

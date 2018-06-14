@@ -2,7 +2,7 @@ pragma experimental "v0.5.0";
 pragma experimental ABIEncoderV2;
 pragma solidity ^0.4.22;
 
-import {EVMMemory} from "../src/EVMMemory.slb";
+import {EVMMemory} from "./EVMMemory.slb";
 import {MemOps} from "./MemOps.slb";
 
 contract EVMMemoryTest {
@@ -42,12 +42,12 @@ contract EVMMemoryTest {
         mem.setCapacity(CAP);
 
         assert(mem.size == 0);
-        assert(mem.cap == CAP);
+        assert(mem.cap == 128);
 
         uint fMem = MemOps.freeMemPtr();
         assert(mem.dataPtr + mem.cap*WORD_SIZE == fMem);
 
-        for(uint i = 0; i < CAP; i++) {
+        for(uint i = 0; i < 128; i++) {
             uint pos = mem.dataPtr + i*WORD_SIZE;
             uint atMem;
             assembly {
@@ -75,7 +75,7 @@ contract EVMMemoryTest {
         EVMMemory.Memory memory mem = EVMMemory.newMemory();
         uint sAddr = WORD_SIZE*70;
         mem.store8(sAddr, 3);
-        assert(mem.cap == sAddr / WORD_SIZE + 1 + ALLOC_SIZE);
+        assert(mem.cap == 128);
         uint pos = mem.dataPtr + sAddr;
         uint val;
         assembly {
@@ -103,7 +103,7 @@ contract EVMMemoryTest {
         EVMMemory.Memory memory mem = EVMMemory.newMemory();
         uint sAddr = WORD_SIZE*83;
         mem.store(sAddr, 3);
-        assert(mem.cap == (sAddr + 31) / 32 + 1 + ALLOC_SIZE);
+        assert(mem.cap == 128);
         uint pos = mem.dataPtr + sAddr;
         uint val;
         assembly {
@@ -203,7 +203,7 @@ contract EVMMemoryTest {
 
     function testStoreBytesBigArray() public payable returns (bool ret) {
         ret = true;
-        bytes memory bts = new bytes(500000*32);
+        bytes memory bts = new bytes(1513*32);
         EVMMemory.Memory memory mem = EVMMemory.newMemory();
         mem.storeBytes(bts, 0, 0, bts.length);
         uint pos = mem.dataPtr;
@@ -211,8 +211,15 @@ contract EVMMemoryTest {
         assembly {
             val := mload(pos)
         }
-        assert(mem.size == 500000);
-        assert(mem.cap == 500064);
+        assert(mem.size == 1513);
+        assert(mem.cap == 2048);
+    }
+
+    function getRootHash() public constant returns (uint) {
+        bytes memory bts = hex"01020304050607080102030405060708010203040506070801020304050607080102030405060708";
+        EVMMemory.Memory memory mem = EVMMemory.newMemory();
+        mem.storeBytes(bts, 0, 0, bts.length);
+        return mem.getRootHash();
     }
 
 }
